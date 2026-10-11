@@ -1,0 +1,148 @@
+{
+  "scenarios": [
+    {
+      "id": "refund/baseline",
+      "provider": "fake",
+      "workflow": "refund",
+      "failure": "none",
+      "description": "Happy path: every system updated, no chaos.",
+      "agent_claimed_success": true,
+      "agent_steps": 6,
+      "agent_notes": [
+        "agent said: completed"
+      ],
+      "unreachable": [],
+      "truth": {
+        "outcome": "PASS",
+        "policy": "PASS",
+        "reasons": [],
+        "orphans": []
+      },
+      "commitlayer": {
+        "provisional": {
+          "outcome": "PASS",
+          "policy": "PASS"
+        },
+        "outcome": "PASS",
+        "policy": "PASS",
+        "reason_codes": [
+          "effect_observed:payments.refund_created",
+          "effect_observed:orders.order_status_changed",
+          "effect_observed:crm.note_added",
+          "effect_observed:tickets.customer_notified"
+        ],
+        "headline": "PASS \u2014 all 4 expected effects observed within 10m; preconditions, limits and prohibitions respected",
+        "failing_check": null,
+        "expected": 4,
+        "observed": 4,
+        "verify_ms": 28,
+        "corrected_by_recheck": false
+      },
+      "policy_match": true,
+      "outcome_match": true,
+      "false_positive": false,
+      "false_negative": false,
+      "duplicate_expected": false,
+      "duplicate_detected": false,
+      "orphan_effects": [],
+      "orphans_flagged": [],
+      "orphans_detected": false,
+      "agent_calls": [
+        {
+          "tool": "get_ticket",
+          "args": {
+            "ticket_id": "tick_1"
+          },
+          "status": "ok",
+          "response": "{\"id\":\"tick_1\",\"customer_id\":\"cust_1\",\"order_id\":\"order_1001\",\"status\":\"open\",\"body\":\"Please help with my order.\"}"
+        },
+        {
+          "tool": "get_order",
+          "args": {
+            "order_id": "order_1001"
+          },
+          "status": "ok",
+          "response": "{\"id\":\"order_1001\",\"customer_id\":\"cust_1\",\"total\":180.0,\"status\":\"paid\",\"address\":\"12 Rue A, Paris\"}"
+        },
+        {
+          "tool": "refund",
+          "args": {
+            "order_id": "order_1001",
+            "amount": 180.0,
+            "idempotency_key": "b5de556e-8816-43f9-9f6c-6c3c6eb7e0d0"
+          },
+          "status": "ok",
+          "response": "{\"ok\":true,\"refund_id\":\"re_order_1001\",\"amount\":180.0}"
+        },
+        {
+          "tool": "update_order_status",
+          "args": {
+            "order_id": "order_1001",
+            "status": "refunded",
+            "idempotency_key": "28381eab-1d39-4351-bdaa-b3e4dfde1f34"
+          },
+          "status": "ok",
+          "response": "{\"ok\":true,\"status\":\"refunded\"}"
+        },
+        {
+          "tool": "add_note",
+          "args": {
+            "subject_id": "order_1001",
+            "text": "Refunded 180.0 USD",
+            "idempotency_key": "20217d65-12f7-430f-8257-a1226497d528"
+          },
+          "status": "ok",
+          "response": "{\"ok\":true}"
+        },
+        {
+          "tool": "notify_customer",
+          "args": {
+            "subject_id": "order_1001",
+            "idempotency_key": "6023997b-3a33-4f19-a5b3-8a8b7045ebb3"
+          },
+          "status": "ok",
+          "response": "{\"ok\":true}"
+        },
+        {
+          "tool": "report_result",
+          "args": {
+            "success": true,
+            "summary": "completed"
+          },
+          "status": "ok"
+        }
+      ],
+      "trace_judge": null,
+      "provider_error": false
+    }
+  ],
+  "summary": {
+    "scenarios": 1,
+    "provider_errors": 0,
+    "policy_agreement": 1,
+    "outcome_agreement": 1,
+    "true_failures": 0,
+    "detected_failures": 0,
+    "false_negatives": 0,
+    "true_passes": 1,
+    "false_positives": 0,
+    "unknown_cases": 0,
+    "unknown_reported_correctly": 0,
+    "false_success_claims": 0,
+    "false_success_claims_caught": 0,
+    "duplicate_cases": 0,
+    "duplicates_detected": 0,
+    "corrected_by_recheck": 0,
+    "orphan_effect_cases": 0,
+    "orphans_detected": 0,
+    "orphan_false_alarms": 0,
+    "trace_judge_scored": 0,
+    "trace_judge_agreement": 0,
+    "trace_judge_missed_failures": 0,
+    "mean_verify_ms": 28,
+    "max_verify_ms": 28
+  },
+  "agent": "llm",
+  "provider": "fake",
+  "model": null
+}

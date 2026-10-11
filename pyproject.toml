@@ -1,0 +1,26 @@
+[project]
+name = "commitlayer-benchmark"
+version = "0.2.4"
+description = "The CommitLayer agent-action benchmark: an artificial enterprise, a failure matrix, three agent adapters and a database oracle. Run it against your own agent and your own CommitLayer workspace."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115", "httpx>=0.27", "pyyaml>=6"]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.50"]
+google = ["google-genai>=1.0"]
+sinks = ["braintrust>=0.0.150", "langsmith>=0.1"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sandbox"]

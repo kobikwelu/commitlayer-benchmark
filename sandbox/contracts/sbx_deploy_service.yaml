@@ -1,0 +1,32 @@
+id: sbx_deploy_service
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Deploy service"
+action_type: deploy_service
+outcome_type: record_processed
+subject_kind: service
+description: >
+  Deploy a version to a healthy service in an allowed environment. The platform must show the deploy, a healthy
+  check afterwards and a change note in the CRM, within 10 minutes. One deploy per request, at most three deploys
+  per agent per hour, never an unhealthy check afterwards. A rollback within 24 hours fails the deploy.
+source_citation: {url: "internal://sandbox/policies/deploy", retrieved: "2026-10-11", title: "Sandbox deploy policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: platform, type: service_health, where: {status: healthy}, message: "Service was not healthy before the deploy"}
+  limits:
+    - param_in: {param: environment, values: [staging, production]}
+  aggregate_limits:
+    - aggregate_exceeds: {source: platform, type: deploy_created, max: 3, over: "1h", by: agent, message: "This agent has deployed more than three times in an hour"}
+  expected_effects:
+    - effect_observed: {source: platform, type: deploy_created, message: "The platform shows no deploy"}
+    - effect_observed: {source: platform, type: health_check, where: {status: healthy}, message: "No healthy check after the deploy"}
+    - effect_observed: {source: crm, type: note_added, message: "No change note was added"}
+  forbidden_effects:
+    - effect_count_exceeds: {source: platform, type: deploy_created, max: 1}
+    - effect_observed: {source: platform, type: health_check, where: {status: unhealthy}, message: "The service reported unhealthy after the deploy"}
+  reversed_by:
+    - effect_observed: {source: platform, type: deploy_rolled_back, within: "24h", message: "The deploy was rolled back"}
+  unverifiable_if:
+    - missing_fact_source: [platform]

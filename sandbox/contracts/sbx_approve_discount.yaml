@@ -1,0 +1,25 @@
+id: sbx_approve_discount
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Approve discount"
+action_type: approve_discount
+outcome_type: record_processed
+subject_kind: order
+description: >
+  Apply a discount of at most 20% to an order that is still awaiting payment, and note it in the CRM. One discount per order.
+source_citation: {url: "internal://sandbox/policies/discount", retrieved: "2026-09-28", title: "Sandbox discount policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: orders, type: order_status, where: {status: pending_payment}, message: "Order was already paid"}
+  limits:
+    - param_max: {param: percent, max: 20}
+  expected_effects:
+    - effect_observed: {source: orders, type: discount_applied, message: "Discount was not applied in the order system"}
+    - effect_observed: {source: crm, type: note_added, message: "No CRM note was added"}
+  forbidden_effects:
+    - effect_attr_exceeds: {source: orders, type: discount_applied, attr: percent, max: 20}
+    - effect_count_exceeds: {source: orders, type: discount_applied, max: 1}
+  unverifiable_if:
+    - missing_fact_source: [orders]

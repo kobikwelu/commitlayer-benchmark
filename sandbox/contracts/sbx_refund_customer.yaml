@@ -1,0 +1,28 @@
+id: sbx_refund_customer
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Refund customer"
+action_type: refund_order
+outcome_type: refund_processed
+subject_kind: order
+description: >
+  Refund a paid order. The refund must appear in payments, the order must move to refunded, a CRM note must be
+  added and the customer notified, within 10 minutes. At most one refund, never above 250 USD.
+source_citation: {url: "internal://sandbox/policies/refund", retrieved: "2026-09-28", title: "Sandbox refund policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: orders, type: order_status, where: {status: paid}, message: "Order was not in a refundable state"}
+  limits:
+    - param_max: {param: amount, max: 250}
+  expected_effects:
+    - effect_observed: {source: payments, type: refund_created, message: "No refund was created in payments"}
+    - effect_observed: {source: orders, type: order_status_changed, where: {status: refunded}, message: "Order did not move to refunded"}
+    - effect_observed: {source: crm, type: note_added, message: "No CRM note was added"}
+    - effect_observed: {source: tickets, type: customer_notified, message: "Customer was not notified"}
+  forbidden_effects:
+    - effect_count_exceeds: {source: payments, type: refund_created, max: 1}
+    - effect_attr_exceeds: {source: payments, type: refund_created, attr: amount, max: 250}
+  unverifiable_if:
+    - missing_fact_source: [payments, orders]

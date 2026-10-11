@@ -1,0 +1,35 @@
+id: sbx_send_payout
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Send payout"
+action_type: send_payout
+outcome_type: record_processed
+subject_kind: account
+description: >
+  Send a payout from an active account. The payout must appear in payments for exactly the amount requested, the
+  ledger must show the balance reduced by that amount, and a CRM note must be added, within 10 minutes. At most one
+  payout per request, never above 1,000 USD, and never more than 5,000 USD per agent across 24 hours. A payout
+  returned within 30 days fails the action.
+source_citation: {url: "internal://sandbox/policies/payout", retrieved: "2026-10-09", title: "Sandbox payout policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: ledger, type: account_status, where: {status: active}, message: "Account was not active"}
+  limits:
+    - param_max: {param: amount, max: 1000}
+  aggregate_limits:
+    - aggregate_exceeds: {source: payments, type: payout_created, attr: amount, max: 5000, over: "24h", by: agent, message: "This agent's payouts over 24 hours exceed 5,000 USD"}
+  expected_effects:
+    - effect_observed: {source: payments, type: payout_created, message: "No payout was created in payments"}
+    - effect_observed: {source: ledger, type: ledger_posted, message: "Ledger entry was not posted"}
+    - effect_observed: {source: crm, type: note_added, message: "No CRM note was added"}
+  forbidden_effects:
+    - effect_count_exceeds: {source: payments, type: payout_created, max: 1}
+    - effect_attr_exceeds: {source: payments, type: payout_created, attr: amount, max: 1000}
+    - effect_attr_differs: {source: payments, type: payout_created, attr: amount, equals_param: amount, message: "Payout amount differs from the amount requested"}
+    - effect_attr_differs: {source: ledger, type: ledger_posted, attr: balance, equals_state: {source: ledger, type: account_balance, attr: balance}, minus_param: amount, tolerance: 0.005, message: "Ledger balance after the payout is not the balance before minus the amount"}
+  reversed_by:
+    - effect_observed: {source: payments, type: payout_returned, within: "30d", message: "The payout was returned"}
+  unverifiable_if:
+    - missing_fact_source: [payments, ledger]

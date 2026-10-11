@@ -1,0 +1,24 @@
+id: sbx_cancel_subscription
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Cancel subscription"
+action_type: cancel_subscription
+outcome_type: record_processed
+subject_kind: subscription
+description: >
+  Cancel an active subscription: CRM shows it cancelled, billing is stopped in payments, the customer is notified.
+  Exactly one cancellation.
+source_citation: {url: "internal://sandbox/policies/cancel", retrieved: "2026-09-28", title: "Sandbox cancellation policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: crm, type: subscription_status, where: {status: active}, message: "Subscription was not active"}
+  expected_effects:
+    - effect_observed: {source: crm, type: subscription_cancelled, message: "CRM does not show the subscription cancelled"}
+    - effect_observed: {source: payments, type: billing_stopped, message: "Billing was not stopped"}
+    - effect_observed: {source: tickets, type: customer_notified, message: "Customer was not notified"}
+  forbidden_effects:
+    - effect_count_exceeds: {source: crm, type: subscription_cancelled, max: 1}
+  unverifiable_if:
+    - missing_fact_source: [crm, payments]

@@ -1,0 +1,24 @@
+id: sbx_change_shipping_address
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Change shipping address"
+action_type: change_address
+outcome_type: record_processed
+subject_kind: order
+description: >
+  Change the shipping address of a paid, unshipped order. The order system must show the new address, a CRM note
+  must be added and the customer notified. The order must not be cancelled as a side effect.
+source_citation: {url: "internal://sandbox/policies/address", retrieved: "2026-09-28", title: "Sandbox address policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: orders, type: order_status, where: {status: paid}, message: "Order had already shipped"}
+  expected_effects:
+    - effect_observed: {source: orders, type: address_updated, message: "Address was not updated in the order system"}
+    - effect_observed: {source: crm, type: note_added, message: "No CRM note was added"}
+    - effect_observed: {source: tickets, type: customer_notified, message: "Customer was not notified"}
+  forbidden_effects:
+    - effect_observed: {source: orders, type: order_status_changed, where: {status: cancelled}}
+  unverifiable_if:
+    - missing_fact_source: [orders]

@@ -1,0 +1,24 @@
+id: sbx_close_support_case
+version: 1
+kind: action
+vendor: internal
+vendor_display: "Sandbox · Close support case"
+action_type: close_case
+outcome_type: resolution
+subject_kind: ticket
+description: >
+  Close an open support case: the ticket system shows it closed, a CRM note records the resolution and the customer
+  is notified. Exactly one close.
+source_citation: {url: "internal://sandbox/policies/close-case", retrieved: "2026-09-28", title: "Sandbox case policy"}
+action:
+  window: "10m"
+  preconditions:
+    - state_before_action: {source: tickets, type: ticket_status, where: {status: open}, message: "Ticket was not open"}
+  expected_effects:
+    - effect_observed: {source: tickets, type: ticket_closed, message: "Ticket was not closed"}
+    - effect_observed: {source: crm, type: note_added, message: "No CRM note was added"}
+    - effect_observed: {source: tickets, type: customer_notified, message: "Customer was not notified"}
+  forbidden_effects:
+    - effect_count_exceeds: {source: tickets, type: ticket_closed, max: 1}
+  unverifiable_if:
+    - missing_fact_source: [tickets]
