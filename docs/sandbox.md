@@ -112,6 +112,8 @@ The key is read from `STRIPE_TEST_SECRET_KEY` only, is never written anywhere, a
 anything else is refused before a single call is made. The results carry `payments_backend` so a JSON or
 markdown file says which backend produced its numbers.
 
+**First run (2026-10-13).** 16 refund scenarios against Stripe test mode, scripted agent, verifier 0.2.4: 16/16 agreement with the oracle, 11/11 real failures detected, 0 false positives, the stale read corrected at re-check, the wrong-customer refund flagged as an orphan. Stripe's refusal of a second full refund turns the three duplicate scenarios into missing-downstream-effect failures, and its refusal of a refund above the charge stops the injected 999 refund; both are documented in `docs/benchmark.md`. Results in `sandbox/results/stripe_scripted.{json,md}`.
+
 ## Real-agent benchmark (Claude, OpenAI, Gemini)
 
 `sandbox/llm/` swaps the scripted agent for a model driving the same tools through a provider adapter
