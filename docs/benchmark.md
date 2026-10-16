@@ -261,7 +261,10 @@ but the verdict:
 
 ```bash
 pip install -e .
-export COMMITLAYER_API_URL=https://api.commitlayer.ai COMMITLAYER_API_KEY=spk_...
+export COMMITLAYER_API_URL=https://api.commitlayer.ai
+export COMMITLAYER_API_KEY=spk_...        # a full key: creates the sandbox contracts, asks for verdicts
+export COMMITLAYER_RECORDER_KEY=spk_...   # records the agent's actions, nothing else
+export COMMITLAYER_EVIDENCE_KEY=spk_...   # pushes the facts; bound to payments, orders, crm, tickets, ledger, platform
 python -m sandbox                                             # scripted agent, all 94 scenarios
 python -m sandbox --agent llm --provider openai --judge       # your model driving the agent
 python -m sandbox --payments stripe --only refund/            # refunds through Stripe test mode

@@ -98,13 +98,13 @@ class InProcessVerifier:
     def ingest(self, facts, links) -> None:
         from app.engine.actions import ingest_facts, ingest_links
 
-        ingest_facts(self.session, self.tenant, facts)
+        ingest_facts(self.session, self.tenant, facts, allow_future=True)
         ingest_links(self.session, self.tenant, links)
 
     def record(self, body: dict[str, Any]):
         from app.engine.actions import record_action
 
-        return record_action(self.session, self.tenant, body)
+        return record_action(self.session, self.tenant, body, allow_future=True)
 
     def verify(self, claim) -> dict[str, Any]:
         from app.engine.actions import verify_action
@@ -128,19 +128,41 @@ class _Recorded:
         self.attributes = {"action_id": view["action_id"]}
 
 
-class ApiVerifier:
-    """Verifies through the public API of a CommitLayer workspace, with an API key: how anyone outside the
-    company runs the benchmark against the product, on their own agent, with nothing of ours in the loop but
-    the verdict. The sandbox contracts are created in the workspace on first use."""
+# The sources the sandbox's systems of record emit facts for: what the evidence key is bound to.
+EVIDENCE_SOURCES = ("payments", "orders", "crm", "tickets", "ledger", "platform")
 
-    def __init__(self, base_url: str, api_key: str, client: httpx.Client | None = None):
-        self.client = client or httpx.Client(
-            base_url=base_url.rstrip("/"), headers={"X-API-Key": api_key}, timeout=60.0
-        )
+
+class ApiVerifier:
+    """Verifies through the public API of a CommitLayer workspace: how anyone outside the company runs the
+    benchmark against the product, on their own agent, with nothing of ours in the loop but the verdict.
+
+    Three credentials, as a real integration has them. The *recorder* key records the agent's actions and can
+    do nothing else; the *evidence* key pushes the facts the sandbox's systems of record emit and is bound to
+    those sources (`EVIDENCE_SOURCES`); the *setup* key (a full key) creates the sandbox contracts, asks for
+    verdicts and reads the orphan report. With only a full key, everything runs through it: that is the single
+    credential the product allows but does not recommend, and the result says so (`credentials: single`)."""
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        client: httpx.Client | None = None,
+        recorder_key: str | None = None,
+        evidence_key: str | None = None,
+        recorder_client: httpx.Client | None = None,
+        evidence_client: httpx.Client | None = None,
+    ):
+        def mk(key: str) -> httpx.Client:
+            return httpx.Client(base_url=base_url.rstrip("/"), headers={"X-API-Key": key}, timeout=60.0)
+
+        self.client = client or mk(api_key)
+        self.recorder = recorder_client or (mk(recorder_key) if recorder_key else self.client)
+        self.evidence = evidence_client or (mk(evidence_key) if evidence_key else self.client)
+        self.split = (self.recorder is not self.client) and (self.evidence is not self.client)
         self._contracts_ready = False
 
-    def _call(self, method: str, path: str, **kw) -> httpx.Response:
-        r = self.client.request(method, path, **kw)
+    def _call(self, method: str, path: str, client: httpx.Client | None = None, **kw) -> httpx.Response:
+        r = (client or self.client).request(method, path, **kw)
         if r.status_code >= 400 and r.status_code != 402:
             detail = r.json().get("error", {}).get("message", r.text) if r.content else r.text
             raise RuntimeError(f"{method} {path} -> {r.status_code}: {detail}")
@@ -165,13 +187,16 @@ class ApiVerifier:
     def ingest(self, facts, links) -> None:
         for i in range(0, len(facts), 500):
             self._call(
-                "POST", "/v1/facts", json={"facts": facts[i : i + 500], "links": links if i == 0 else []}
+                "POST",
+                "/v1/facts",
+                client=self.evidence,
+                json={"facts": facts[i : i + 500], "links": links if i == 0 else []},
             )
         if not facts and links:
-            self._call("POST", "/v1/facts", json={"facts": [], "links": links})
+            self._call("POST", "/v1/facts", client=self.evidence, json={"facts": [], "links": links})
 
     def record(self, body: dict[str, Any]) -> _Recorded:
-        return _Recorded(self._call("POST", "/v1/actions", json=body).json()["action"])
+        return _Recorded(self._call("POST", "/v1/actions", client=self.recorder, json=body).json()["action"])
 
     def verify(self, claim: _Recorded) -> dict[str, Any]:
         return self._call(
@@ -311,12 +336,24 @@ class Matrix:
         api_url: str | None = None,
         api_key: str | None = None,
         api_client: httpx.Client | None = None,
+        recorder_key: str | None = None,
+        evidence_key: str | None = None,
+        recorder_client: httpx.Client | None = None,
+        evidence_client: httpx.Client | None = None,
     ):
         self.agent_kind, self.provider, self.model, self.judge = agent, provider, model, judge
         # API mode: every scenario runs against one workspace through its public API, namespaced per run, so
         # the verifier under test is the deployed product and nothing in-process
         self.api = (
-            ApiVerifier(api_url or "http://api", api_key or "", client=api_client)
+            ApiVerifier(
+                api_url or "http://api",
+                api_key or "",
+                client=api_client,
+                recorder_key=recorder_key,
+                evidence_key=evidence_key,
+                recorder_client=recorder_client,
+                evidence_client=evidence_client,
+            )
             if (api_url and api_key) or api_client is not None
             else None
         )
@@ -522,6 +559,9 @@ class Matrix:
             "replay_of": self.replay_of,
             "payments_backend": self.payments,
             "verifier": "api" if self.api is not None else "in-process",
+            # "split": a recorder key recorded and an evidence key pushed the facts, as a real integration
+            # does; "single": one full key did both, which the product allows but does not recommend.
+            "credentials": ("split" if self.api.split else "single") if self.api is not None else None,
         }
         if self.sinks is not None:
             res["sinks"] = self.sinks.finish()
@@ -662,11 +702,25 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument(
         "--api-key",
         default=os.environ.get("COMMITLAYER_API_KEY"),
-        help="API key of that workspace (or COMMITLAYER_API_KEY); nothing else of yours is sent",
+        help="full key of that workspace (or COMMITLAYER_API_KEY): creates the sandbox contracts, asks for "
+        "verdicts, reads orphans; nothing else of yours is sent",
+    )
+    ap.add_argument(
+        "--recorder-key",
+        default=os.environ.get("COMMITLAYER_RECORDER_KEY"),
+        help="recorder key (or COMMITLAYER_RECORDER_KEY): records the agent's actions and nothing else",
+    )
+    ap.add_argument(
+        "--evidence-key",
+        default=os.environ.get("COMMITLAYER_EVIDENCE_KEY"),
+        help="evidence key bound to the sandbox's sources (or COMMITLAYER_EVIDENCE_KEY): pushes the facts; "
+        f"create it with fact_sources {list(EVIDENCE_SOURCES)}",
     )
     args = ap.parse_args(argv)
     if bool(args.api_url) != bool(args.api_key):
         ap.error("--api-url and --api-key go together")
+    if bool(args.recorder_key) != bool(args.evidence_key):
+        ap.error("--recorder-key and --evidence-key go together: one credential per side of the line")
     replay = None
     if args.replay:
         replay = json.loads(Path(args.replay).read_text())
@@ -682,6 +736,8 @@ def main(argv: list[str] | None = None) -> None:
         payments=args.payments,
         api_url=args.api_url,
         api_key=args.api_key,
+        recorder_key=args.recorder_key,
+        evidence_key=args.evidence_key,
     )
     res = m.run_all(args.only)
     out = Path(args.out)

@@ -33,17 +33,29 @@ oracle's.
 
 ## Run it against your own workspace
 
-You need Python 3.11+, a CommitLayer workspace (the free Developer plan is enough) and an API key from
-Settings → API keys. The harness records each scenario's action and pushes the facts through the public API,
-exactly as your own integration would; each scenario counts as one verified action in your workspace.
+You need Python 3.11+, a CommitLayer workspace (the free Developer plan is enough) and three API keys from
+Settings → API keys, one per side of the line, the way a real integration is wired:
+
+- a **Runtime recorder** key: records each scenario's action and can do nothing else;
+- an **Evidence** key bound to the sandbox's six sources (`payments, orders, crm, tickets, ledger, platform`):
+  pushes the facts the sandbox's systems of record emit and cannot record actions;
+- a **Full access** key: creates the seven sandbox contracts on first run and asks for verdicts.
+
+The key that records an action can never also supply the facts that verify it. Each scenario counts as one
+verified action in your workspace; nothing else of yours is sent.
 
 ```bash
 pip install -e .
 export COMMITLAYER_API_URL=https://api.commitlayer.ai
-export COMMITLAYER_API_KEY=spk_...        # your workspace's key; nothing else of yours is sent
-python -m sandbox                          # scripted agent, every scenario
-python -m sandbox --only refund/ deploy/   # a subset
+export COMMITLAYER_API_KEY=spk_...          # Full access: contracts and verdicts
+export COMMITLAYER_RECORDER_KEY=spk_...     # Runtime recorder: the agent's actions
+export COMMITLAYER_EVIDENCE_KEY=spk_...     # Evidence: the facts, bound to the six sources above
+python -m sandbox                            # scripted agent, every scenario
+python -m sandbox --only refund/ deploy/     # a subset
 ```
+
+With only the full key set, everything runs through it and the result says `credentials: single`; with the
+three keys it says `credentials: split`.
 
 The run prints one line per scenario and writes `results/latest.json` and `results/latest.md`. On its first run
 the harness creates the seven sandbox contracts in your workspace (prefixed `sbx_`; like the library contracts
